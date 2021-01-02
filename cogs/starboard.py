@@ -3,6 +3,7 @@ import datetime
 from discord.ext import commands
 
 class Starboard(commands.Cog):
+    """Starboard module"""
     def __init__(self, bot):
         self.bot = bot
 
@@ -27,3 +28,4 @@ class Starboard(commands.Cog):
 
 def setup(bot):
     bot.add_cog(Starboard(bot))
+    print('starboard module loaded')
