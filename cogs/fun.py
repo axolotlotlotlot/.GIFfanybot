@@ -1,4 +1,4 @@
-#from carberra
+#from carberra https://github.com/Carberra/updated-discord.py-tutorial
 from random import choice, randint
 from typing import Optional
 
