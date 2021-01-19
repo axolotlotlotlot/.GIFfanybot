@@ -43,7 +43,7 @@ async def on_guild_join(guild):
     db = dataset.connect('sqlite:///journal3.db')
     db.begin()
     table = db['prefixes']
-    table.insert(dict(guildid=guild.id, prefix='z.'))
+    table.insert(dict(guildid=guild.id, prefix='.'))
     db.commit()
 
 @bot.event
