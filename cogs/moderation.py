@@ -1,22 +1,39 @@
+from datetime import datetime, timedelta
+from typing import Optional
+from discord import Embed, Member, NotFound, Object
+from discord.ext.commands import Greedy, Converter, BadArgument
+from discord.utils import find
 import discord
 import asyncio
 import sqlite3
 import typing
 from discord.ext import commands
+from discord.ext.commands import bot_has_permissions
 
-def mute_role(ctx):
-    discord.utils.get(ctx.guild.roles, name="Muted")
 
-def member():
-    discord.User
+class BannedUser(Converter):
+    async def convert(self, ctx, arg):
+        if ctx.guild.me.guild_permissions.ban_members:
+            if arg.isdigit():
+                try:
+                    return (await ctx.guild.fetch_ban(Object(id=int(arg)))).user
+                except NotFound:
+                    raise BadArgument
 
-def log_channel():
-    discord.client.get_channel(785206949192400896)
+        banned = [e.user for e in await ctx.guild.bans()]
+        if banned:
+            if (user := find(lambda u: str(u) == arg, banned)) is not None:
+                return user
+            else:
+                raise BadArgument
+
 
 class Moderation(commands.Cog):
     """Moderation module"""
+
     def __init__(self, bot):
         self.bot = bot
+
     @commands.Cog.listener()
     async def on_command_error(self, ctx, error):
         if isinstance(error, commands.MissingPermissions):
@@ -26,66 +43,90 @@ class Moderation(commands.Cog):
 
     @commands.command()
     @commands.has_permissions(ban_members=True)
-    async def ban(self, ctx, member: discord.Member = None, *, reason=None):
-        """Ban member from guild. Use: <p>ban <member(s)> <reason>"""
-        if member == ctx.message.author:
-            await ctx.channel.send("You cannot ban yourself!")
-            return
-
-        if member == None:
-            await ctx.channel.send("Please provide a user!")
-            return
-
-        if reason == None:
-            reason = "No reason provided."
-        message = f"You have been banned from {ctx.guild.name} for {reason}."
-        await ctx.guild.ban(member, reason=reason)
-        await ctx.channel.send(f"{member} was banned for {reason}")
+    async def ban(self, ctx, targets: Greedy[Member], *, reason: Optional[str] = "No reason provided."):
+        if not len(targets):
+            await ctx.send("Please provide member(s)")
+        else:
+            for target in targets:
+                if target == ctx.message.author:
+                    await ctx.channel.send("You cannot ban yourself!")
+                    return
+                if (ctx.message.guild.me.top_role.position > target.top_role.position
+                        and not target.guild_permissions.administrator):
+                    await target.ban(reason=reason)
+                    embed = Embed(title="Member banned",
+                                  colour=0xDD2222,
+                                  timestamp=datetime.utcnow())
+                    embed.set_thumbnail(url=target.avatar_url)
+                    embed.set_footer(text=f'User ID: {target.id}')
+                    fields = [("Member", f"{target.mention}", False),
+                              ("Reason", reason, False),
+                              ("Actioned by", ctx.author.mention, False)]
+                    for name, value, inline in fields:
+                        embed.add_field(name=name, value=value, inline=inline)
+                    await ctx.send(embed=embed)
+                    #await ctx.send(f"{len(targets)} have been banned")
 
     @commands.command()
     @commands.has_permissions(ban_members=True)
-    async def unban(self, ctx, member: discord.Member = None, *, reason=None):
+    async def unban(self, ctx, targets: Greedy[BannedUser], *, reason: Optional[str] = "No reason provided."):
         """Unban member from guild. Use: <p>unban <member(s)> <reason>"""
-        if member == ctx.message.author:
-            await ctx.channel.send("You cannot unban yourself!")
-            return
+        if not len(targets):
+            await ctx.send("Please provide member(s)")
 
-        if member == None:
-            await ctx.channel.send("Please provide a user!")
-            return
-
-        if reason == None:
-            reason = "No reason provided."
-        message = f"You have been unbanned from {ctx.guild.name} for {reason}."
-        await ctx.guild.unban(member, reason=reason)
-        await ctx.channel.send(f"{member} was unbanned.")
+        else:
+            for target in targets:
+                if target == ctx.message.author:
+                    await ctx.channel.send("You cannot unban yourself!")
+                    return
+                await ctx.guild.unban(target, reason=reason)
+                embed = Embed(title="Member unbanned",
+                              colour=0xDD2222,
+                              timestamp=datetime.utcnow())
+                embed.set_thumbnail(url=target.avatar_url)
+                embed.set_footer(text=f'User ID: {target.id}')
+                fields = [("Member", f"{target.mention}", False),
+                          ("Reason", reason, False),
+                          ("Actioned by", ctx.author.mention, False)]
+                for name, value, inline in fields:
+                    embed.add_field(name=name, value=value, inline=inline)
+                await ctx.send(embed=embed)
 
     @commands.command()
+    @bot_has_permissions(kick_members=True)
     @commands.has_permissions(kick_members=True)
-    async def kick(self, ctx, member: discord.Member = None, *, reason=None):
-        """Kick member from guild. Use: <p>kick <member(s)> <reason>"""
-        if member == ctx.message.author:
-            await ctx.channel.send("You cannot kick yourself!")
-            return
-
-        if member == None:
-            await ctx.channel.send("Please provide a user!")
-            return
-
-        if reason == None:
-            reason = "No reason provided."
-        message = f"You have been kicked from {ctx.guild.name} for {reason}."
-        await ctx.guild.kick(member, reason=reason)
-        await ctx.channel.send(f"{member} was kicked.")
-        await ctx.member.send(message)
+    async def kick(self, ctx, targets: Greedy[Member], *, reason: Optional[str] = "No reason provided."):
+        if not len(targets):
+            await ctx.send("Please provide member(s)")
+        else:
+            for target in targets:
+                if target == ctx.message.author:
+                    await ctx.channel.send("You cannot ban yourself!")
+                    return
+                if (ctx.message.guild.me.top_role.position > target.top_role.position
+                        and not target.guild_permissions.administrator):
+                    await target.kick(reason=reason)
+                    embed = Embed(title="Member kicked",
+                                  colour=0xDD2222,
+                                  timestamp=datetime.utcnow())
+                    embed.set_thumbnail(url=target.avatar_url)
+                    embed.set_footer(text=f'User ID: {target.id}')
+                    fields = [("Member", f"{target.mention}", False),
+                              ("Reason", reason, False),
+                              ("Actioned by", ctx.author.mention, False)]
+                    for name, value, inline in fields:
+                        embed.add_field(name=name, value=value, inline=inline)
+                    await ctx.send(embed=embed)
+                    await ctx.send(f"{len(targets)} have been kicked")
 
     @commands.command(aliases=["purge", "clear", "clean"])
     @commands.has_permissions(manage_messages=True)
     async def delete(self, ctx, amount=2):
         """Delete messages. Use: <p>delete <amount> Aliases:purge, clear, clean"""
-        await ctx.channel.purge(limit=amount)
         deleted = await ctx.channel.purge(limit=amount)
-        await ctx.channel.send('Deleted {} message(s)'.format(len(deleted)))
+        async with ctx.typing():
+            await asyncio.sleep(0.5)
+        await ctx.channel.send('Deleted {} messages'.format(len(deleted)))
 
     @commands.command()
     @commands.has_role('Mods')
@@ -93,11 +134,13 @@ class Moderation(commands.Cog):
         """(currently broken)Mute members and optional timer. Use: <p>mute <member(s)> <time> <reason>"""
         db = sqlite3.connect('main.sqlite')
         cursor = db.cursor()
+
         def field(command, *values):
             cursor.execute(command, tuple(values))
 
             if (fetch := cursor.fetchone()) is not None:
                 return fetch[0]
+
         if members == ctx.message.author:
             await ctx.channel.send("You cannot limbo yourself!")
             return
@@ -128,7 +171,8 @@ class Moderation(commands.Cog):
         if mute_minutes > 0:
             await asyncio.sleep(mute_minutes * 60)
             for member in members:
-                role_ids = field(f"SELECT roles_ids FROM limbo WHERE user_id = {member.id} AND guild_id = {ctx.guild.id}")
+                role_ids = field(
+                    f"SELECT roles_ids FROM limbo WHERE user_id = {member.id} AND guild_id = {ctx.guild.id}")
                 roles = [ctx.guild.get_role(int(id_)) for id_ in role_ids.split(",") if len(id_)]
                 await member.edit(roles=roles)
                 cursor.execute(f"DELETE FROM limbo WHERE guild_id = {ctx.guild.id} AND user_id = {member.id}")
@@ -140,16 +184,18 @@ class Moderation(commands.Cog):
 
     @commands.command()
     @commands.has_role('Mods')
-    async def unmute(self, ctx, members: discord.Member, *, reason: str = "None" ):
+    async def unmute(self, ctx, members: discord.Member, *, reason: str = "None"):
         """(currently broken)Unmute members. Use: <p>unmute <member(s)> <reason>"""
         db = sqlite3.connect('main.sqlite')
         cursor = db.cursor()
         muterole = discord.utils.find(ctx.guild.roles, name='Muted')
+
         def field(command, *values):
             cursor.execute(command, tuple(values))
 
             if (fetch := cursor.fetchone()) is not None:
                 return fetch[0]
+
         if members == ctx.message.author:
             await ctx.channel.send("You cannot unmute yourself!")
             return
@@ -164,7 +210,8 @@ class Moderation(commands.Cog):
                 return
 
             if muterole in member.roles:
-                role_ids = field(f"SELECT roles_ids FROM mutes WHERE user_id = {member.id} AND guild_id = {ctx.guild.id}")
+                role_ids = field(
+                    f"SELECT roles_ids FROM mutes WHERE user_id = {member.id} AND guild_id = {ctx.guild.id}")
                 roles = [ctx.guild.get_role(int(id_)) for id_ in role_ids.split(",") if len(id_)]
 
                 if roles in member.roles:
@@ -180,6 +227,7 @@ class Moderation(commands.Cog):
             db.commit()
             cursor.close()
             db.close()
+
 
 def setup(bot):
     bot.add_cog(Moderation(bot))

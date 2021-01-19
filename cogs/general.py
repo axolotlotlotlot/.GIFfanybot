@@ -1,7 +1,10 @@
 import os
 
+import dataset
 import discord
 from discord.ext import commands
+from discord.ext.commands import BucketType
+
 
 class General(commands.Cog):
     def __init__(self, bot):
@@ -26,7 +29,6 @@ class General(commands.Cog):
 
         embed.add_field(name="Roles:", value="".join([role.mention for role in roles[1:]]))
         embed.add_field(name="Highest Role:", value=member.top_role.mention)
-        print(member.top_role.mention)
         await ctx.send(embed=embed)
 
     @commands.command(aliases=["whatsdat"])
@@ -65,6 +67,18 @@ class General(commands.Cog):
             await ctx.send("Enjoy :>", file=file)
             filepath = './{0}'.format(filename)
             os.remove(filepath)
+
+    @commands.command(aliases=["say"])
+    @commands.cooldown(1, 15, BucketType.guild)
+    async def echo(self, ctx, *, message):
+        MT = discord.utils.get(ctx.guild.roles, name="Mods")
+        if MT in ctx.author.roles:
+            await ctx.message.delete()
+            await ctx.send(message)
+        else:
+            await ctx.send("Only Mods can use this command")
+
+
 
 def setup(bot):
     bot.add_cog(General(bot))

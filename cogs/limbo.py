@@ -103,7 +103,7 @@ class Limbo(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message):
-        db = sqlite3.connect('main.sqlite')
+        db = sqlite3.connect('journal3.db')
         cursor = db.cursor()
         cursor.execute(f"SELECT channel_id FROM logs WHERE guild_id = {message.guild.id}")
         result = cursor.fetchone()

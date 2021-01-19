@@ -18,9 +18,14 @@ class Welcomer(commands.Cog):
         cursor.execute(f"SELECT channel_id FROM welcomer WHERE guild_id = {before.guild.id}")
         result = cursor.fetchone()
         limborole = discord.utils.get(before.guild.roles, name="Limbo")
+        rejoin = discord.utils.get(before.guild.roles, name="rejoin")
         if result is None:
             return
+
         if limborole in before.roles:
+            return
+
+        if rejoin in before.roles:
             return
 
         if len(before.roles) < len(after.roles):
