@@ -1,12 +1,13 @@
+import asyncio
+import re
 import sqlite3
 from datetime import datetime, timedelta
+from typing import Optional
 import discord
 import dataset
-from discord import Member
+from discord import Member, Embed
 from discord.ext import commands
-from discord.ext.commands import Greedy
-from discord import Embed
-
+from discord.ext.commands import Greedy, CommandNotFound
 
 def findroleid(roleName, guild):
     roles = guild.roles
@@ -14,6 +15,7 @@ def findroleid(roleName, guild):
         if i.name == roleName:
             return i.id
     return None
+
 
 class giverole(commands.Cog):
     def __init__(self, bot):
@@ -61,20 +63,22 @@ class giverole(commands.Cog):
             for target in targets:
                 if roles in target.roles:
                     await target.remove_roles(roles)
-                    embed = discord.Embed(description=f":white_check_mark: I have removed **{Name}** from {target.mention}",
-                                          timestamp=datetime.utcnow(),
-                                          color=0x77B255)
+                    embed = discord.Embed(
+                        description=f":white_check_mark: I have removed **{Name}** from {target.mention}",
+                        timestamp=datetime.utcnow(),
+                        color=0x77B255)
                     embed.set_footer(text=f'Actioned by: {ctx.author} / {ctx.author.id}')
                     await ctx.send(embed=embed)
                 elif roles not in target.roles:
                     await target.add_roles(roles)
-                    embed = discord.Embed(description=f":white_check_mark: I have assigned **{Name}** to {target.mention}",
-                                          timestamp=datetime.utcnow(),
-                                          color=0x77B255)
+                    embed = discord.Embed(
+                        description=f":white_check_mark: I have assigned **{Name}** to {target.mention}",
+                        timestamp=datetime.utcnow(),
+                        color=0x77B255)
                     embed.set_footer(text=f'Actioned by: {ctx.author} / {ctx.author.id}')
                     await ctx.send(embed=embed)
 
-    @giveyou.command()
+    @giveyou.command(aliases=['add'])
     @commands.has_permissions(administrator=True)
     async def create(self, ctx, name=None, *, roleName=None):
         """(Admin only)Create giveyous. Use: .giveyou create <name> <role(case sensitive)>"""
@@ -133,9 +137,9 @@ class giverole(commands.Cog):
         cursor.close()
         db.close()
 
-    @giveyou.command()
+    @giveyou.command(aliases=['remove'])
     @commands.has_permissions(administrator=True)
-    async def remove(self, ctx, name=None):
+    async def delete(self, ctx, name=None):
         """(Admin only)Remove giveyous. Use: .giveyou remove <name>"""
         if name == None:
             embed = Embed(
@@ -161,17 +165,7 @@ class giverole(commands.Cog):
                 embed = Embed(description=f":x: I couldn't find a giveyou with the name **{name}**",
                               color=0xDD2222)
                 await ctx.send(embed=embed)
-    
-    @giveyou.command()
-    async def list(self, ctx):
-        db = dataset.connect('sqlite:///journal3.db')
-        db.begin()
-        msg = 'List of all tags:\n'
 
-        for i in db['giveyou']:
-            msg = msg + '**' + i['name'] + '**\n'
-
-        await ctx.send(msg)
     @commands.group(invoke_without_command=True)
     async def giveme(self, ctx, *, Name=None, member: discord.Member = None):
         if member == None:
@@ -198,13 +192,6 @@ class giverole(commands.Cog):
         if Name == None:
             embed = Embed(
                 description=":x: Please provide a giveme name",
-                color=0xDD2222)
-            await ctx.send(embed=embed)
-            return
-
-        if Name == 'remove':
-            embed = Embed(
-                description=":x: delete not remove",
                 color=0xDD2222)
             await ctx.send(embed=embed)
             return
@@ -244,7 +231,7 @@ class giverole(commands.Cog):
         cursor.close()
         db1.close()
 
-    @giveme.command()
+    @giveme.command(aliases=['add'])
     @commands.has_permissions(administrator=True)
     async def create(self, ctx, name=None, roleName: Optional[str]=None, *, rankName=None):
 
@@ -275,6 +262,8 @@ class giverole(commands.Cog):
                 roles = guild.roles
                 for i in roles:
                     if i.name == rankName:
+                        return i.id
+                    elif i.id == rankName:
                         return i.id
                 return None
 
@@ -321,23 +310,27 @@ class giverole(commands.Cog):
         cursor.close()
         db.close()
 
-    @giveme.command()
+    @giveme.command(aliases=['remove'])
     @commands.has_permissions(administrator=True)
     async def delete(self, ctx, name=None):
+        db = dataset.connect('sqlite:///journal3.db')
+        db.begin()
+        table = db['giveme']
 
         if name == None:
             embed = Embed(
-                description=":x: Please provide a giveme",
+                description=":x: Please provide a giveme name",
                 color=0xDD2222)
             await ctx.send(embed=embed)
             return
 
-        db = dataset.connect('sqlite:///journal3.db')
-        db.begin()
-        table = db['giveme']
-        rolenames = table.find(guildid=ctx.guild.id, name=name)
-        for rolename in rolenames:
-            if name == rolename['name']:
+        Names = ''
+        for i in db['giveme']:
+            if i['guildid'] == ctx.guild.id:
+                Names = Names + f"{i['name']}"
+        if i['guildid'] == ctx.guild.id:
+            p = set(str(name)) & set(str(Names))
+            if p:
                 table.delete(guildid=ctx.guild.id, name=name)
                 db.commit()
                 embed = discord.Embed(description=f":white_check_mark: giveme **{name}** removed",
@@ -467,8 +460,10 @@ class giverole(commands.Cog):
                         description=f":x: User {member.mention} doesn't have that role",
                         color=0xDD2222)
                     await ctx.send(embed=embed)
-                    
-    @commands.group(invoke_without_command=True)
+
+
+
+    @commands.group(aliases=['colorme'],invoke_without_command=True)
     async def colourme(self, ctx, *, Name=None, member: discord.Member = None):
         db = dataset.connect('sqlite:///journal3.db')
         db.begin()
@@ -510,13 +505,6 @@ class giverole(commands.Cog):
             if i['guildid'] == ctx.guild.id:
                 msg = msg + f"{int(i['roleid'])}" + ','
         croles = msg.split(',')
-
-        if Name == 'remove':
-            embed = Embed(
-                description=":x: delete not remove",
-                color=0xDD2222)
-            await ctx.send(embed=embed)
-            return
 
         if name != Name:
             embed = Embed(
@@ -572,7 +560,7 @@ class giverole(commands.Cog):
                 color=0xDD2222)
             await ctx.send(embed=embed)
 
-    @colourme.command()
+    @colourme.command(aliases=['add'])
     @commands.has_permissions(administrator=True)
     async def create(self, ctx, name=None, roleName: Optional[str] = None, *, rankName=None):
 
@@ -629,7 +617,7 @@ class giverole(commands.Cog):
         rolenames = field("SELECT name FROM colourme WHERE guildid = ? AND rolename = ?", ctx.guild.id, roleName)
 
         if name == rolenames:
-            embed = Embed(description=f":x: giveme with the name **{name}** already exists",
+            embed = Embed(description=f":x: colourme with the name **{name}** already exists",
                           color=0xDD2222)
             await ctx.send(embed=embed)
             return
@@ -642,7 +630,7 @@ class giverole(commands.Cog):
                               roleid=roleID))
             db.commit()
             embed = discord.Embed(
-                description=f":white_check_mark: giveme **{name}** created \n Requirements:{rankName}",
+                description=f":white_check_mark: colourme **{name}** created \n Requirements:{rankName}",
                 timestamp=datetime.utcnow(),
                 color=0x77B255)
             embed.set_footer(text=f'created by: {ctx.author} / {ctx.author.id}')
@@ -651,7 +639,7 @@ class giverole(commands.Cog):
         cursor.close()
         db.close()
 
-    @colourme.command()
+    @colourme.command(aliases=['remove'])
     @commands.has_permissions(administrator=True)
     async def delete(self, ctx, name=None):
         db = dataset.connect('sqlite:///journal3.db')
@@ -696,7 +684,6 @@ class giverole(commands.Cog):
             await ctx.send(msg)
         else:
             await ctx.send(" No colourmes for this server found")
-
 
 def setup(bot):
     bot.add_cog(giverole(bot))
