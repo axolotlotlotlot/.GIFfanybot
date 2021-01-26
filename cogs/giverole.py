@@ -654,29 +654,33 @@ class giverole(commands.Cog):
     @colourme.command()
     @commands.has_permissions(administrator=True)
     async def delete(self, ctx, name=None):
+        db = dataset.connect('sqlite:///journal3.db')
+        db.begin()
+        table = db['colourme']
 
         if name == None:
             embed = Embed(
-                description=":x: Please provide a giveme",
+                description=":x: Please provide a colourme name",
                 color=0xDD2222)
             await ctx.send(embed=embed)
             return
 
-        db = dataset.connect('sqlite:///journal3.db')
-        db.begin()
-        table = db['giveme']
-        rolenames = table.find(guildid=ctx.guild.id, name=name)
-        for rolename in rolenames:
-            if name == rolename['name']:
+        Names = ''
+        for i in db['colourme']:
+            if i['guildid'] == ctx.guild.id:
+                Names = Names + f"{i['name']}"
+        if i['guildid'] == ctx.guild.id:
+            p = set(str(name)) & set(str(Names))
+            if p:
                 table.delete(guildid=ctx.guild.id, name=name)
                 db.commit()
-                embed = discord.Embed(description=f":white_check_mark: giveme **{name}** removed",
+                embed = discord.Embed(description=f":white_check_mark: colourme **{name}** removed",
                                       timestamp=datetime.utcnow(),
                                       color=0x77B255)
                 embed.set_footer(text=f'removed by: {ctx.author} / {ctx.author.id}')
                 await ctx.send(embed=embed)
             else:
-                embed = Embed(description=f":x: I couldn't find a giveme with the name **{name}**",
+                embed = Embed(description=f":x: I couldn't find a colourme with the name **{name}**",
                               color=0xDD2222)
                 await ctx.send(embed=embed)
 
