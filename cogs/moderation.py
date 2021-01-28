@@ -43,17 +43,19 @@ class Moderation(commands.Cog):
 
     @commands.command()
     @commands.has_permissions(ban_members=True)
-    async def ban(self, ctx, targets: Greedy[Member], *, reason: Optional[str] = "No reason provided."):
+    async def ban(self, ctx, targets: Greedy[discord.User], *, reason: Optional[str] = "No reason provided."):
         if not len(targets):
-            await ctx.send("Please provide member(s)")
+            embed = Embed(description=f":x: Please provide member(s)",
+                          color=0xDD2222)
+            await ctx.send(embed=embed)
         else:
             for target in targets:
                 if target == ctx.message.author:
-                    await ctx.channel.send("You cannot ban yourself!")
-                    return
-                if (ctx.message.guild.me.top_role.position > target.top_role.position
-                        and not target.guild_permissions.administrator):
-                    await target.ban(reason=reason)
+                    embed = Embed(description=f":x: You can't ban yourself!",
+                                  color=0xDD2222)
+                    await ctx.send(embed=embed)
+                else:
+                    await ctx.guild.ban(discord.Object(id=int(target.id)), reason=reason)
                     embed = Embed(title="Member banned",
                                   colour=0xDD2222,
                                   timestamp=datetime.utcnow())
