@@ -13,11 +13,6 @@ intents = discord.Intents.default()
 intents.members = True
 messages = joined = 0
 ###################################
-logger = logging.getLogger('discord')
-logger.setLevel(logging.DEBUG)
-handler = logging.FileHandler(filename='discord.log', encoding='utf-8', mode='w')
-handler.setFormatter(logging.Formatter('%(asctime)s:%(levelname)s:%(name)s: %(message)s'))
-logger.addHandler(handler)
 
 
 def get_prefix(client, message):
@@ -67,6 +62,7 @@ async def changeprefix(ctx, prefix):
     cursor.close()
     db.close()
     await ctx.send(f'Prefix has been changed to {prefix}')
+    
 ##########################################################################
 
 @bot.event
@@ -102,6 +98,63 @@ async def on_member_kick(guild, member: discord.Member):
     main.close()
 
 ##########################################################################
+
+@bot.command(name='botinfo', aliases=['bot', 'info'])
+async def botinfo(ctx):
+    '''Shows info about bot'''
+    em = discord.Embed(color=discord.Color.green())
+    em.title = 'Bot Info'
+    em.set_author(name=ctx.author.name, icon_url=ctx.author.avatar_url)
+    try:
+        em.description = bot.psa + '\n[Made for r/GravityFalls](https://discord.gg/gravityfalls)'
+    except AttributeError:
+        em.description = 'A multipurpose bot poorly made by slowmachine#9665\n[Made for r/GravityFalls](https://discord.gg/gravityfalls)'
+    em.add_field(name="Servers", value=len(bot.guilds))
+    em.add_field(name="Online Users", value=str(len({m.id for m in bot.get_all_members() if m.status is not discord.Status.offline})))
+    em.add_field(name='Total Users', value=len(bot.users))
+    em.add_field(name='Channels', value=f"{sum(1 for g in bot.guilds for _ in g.channels)}")
+    em.add_field(name="Library", value=f"discord.py")
+    em.add_field(name="Bot Latency", value=f"{bot.ws.latency * 1000:.0f} ms")
+    em.add_field(name='GitHub', value='[Click here](https://github.com/siren15/.GIFfanybot)')
+    em.set_footer(text=".GIFfany-bot | Powered by discord.py")
+    await ctx.send(embed=em)
+
+##########################################################################
+
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def disable(ctx, name):
+    """Disables commands."""
+    await bot.remove_command(name)
+    embed = discord.Embed(description=":white_check_mark: Disabled {0}".format(name),
+                          timestamp=datetime.utcnow(),
+                          color=0x77B255)
+    await ctx.send(embed=embed)
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def enable(ctx, name):
+    """Enables commands"""
+    await bot.remove_command(name)
+    embed = discord.Embed(description=":white_check_mark: Enabled {0}".format(name),
+                          timestamp=datetime.utcnow(),
+                          color=0x77B255)
+    await ctx.send(embed=embed)
+    
+##########################################################################
+
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def reload(ctx, extension):
+    bot.unload_extension(f'cogs.{extension}')
+    print(f'unloaded {extension}')
+    bot.load_extension(f'cogs.{extension}')
+    print(f"loaded {extension}")
+    print(f"{extension} reloaded")
+    embed = discord.Embed(description=":white_check_mark: Reloaded {0}".format(extension),
+                          timestamp=datetime.utcnow(),
+                          color=0x77B255)
+    await ctx.send(embed=embed)
+
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def load(ctx, extension):
