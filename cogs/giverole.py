@@ -166,6 +166,19 @@ class giverole(commands.Cog):
                               color=0xDD2222)
                 await ctx.send(embed=embed)
 
+    @giveyou.command()
+    async def list(self, ctx):
+        db = dataset.connect('sqlite:///journal3.db')
+        db.begin()
+        msg = ''
+        for i in db['giveyou']:
+            if i['guildid'] == ctx.guild.id:
+                msg = msg + '**' + f"{i['name']}" + '** \n'
+        if i['guildid'] == ctx.guild.id:
+            await ctx.send(msg)
+        else:
+            await ctx.send(" No giveyous for this server found")
+
     @commands.group(invoke_without_command=True)
     async def giveme(self, ctx, *, Name=None, member: discord.Member = None):
         if member == None:

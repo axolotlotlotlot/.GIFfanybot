@@ -1,6 +1,8 @@
 import discord
 import sqlite3
 import datetime
+
+from discord import Embed
 from discord.ext import commands
 
 class Limbo(commands.Cog):
@@ -19,15 +21,21 @@ class Limbo(commands.Cog):
         role_ids = ",".join([str(role.id) for role in member.roles[1:]])
 
         if member == ctx.message.author:
-            await ctx.channel.send("You cannot limbo yourself!")
+            embed = Embed(description=f":x: You can't limbo yourself!",
+                          color=0xDD2222)
+            await ctx.send(embed=embed)
             return
 
         if member == None:
-            await ctx.channel.send("Please provide a user!")
+            embed = Embed(description=f":x: Please provide a member!",
+                          color=0xDD2222)
+            await ctx.send(embed=embed)
             return
 
         if limborole in member.roles:
-            await ctx.send(f"{member} is already limboed")
+            embed = Embed(description=f":x: {member} is already limboed",
+                          color=0xDD2222)
+            await ctx.send(embed=embed)
             return
 
         sql = ("INSERT INTO limbo(guild_id, user_id, roles_ids) VALUES(?, ?, ?)")
@@ -65,24 +73,31 @@ class Limbo(commands.Cog):
                 return row[0]
 
         if member == ctx.message.author:
-            await ctx.channel.send("You cannot limbo yourself!")
+            embed = Embed(description=f":x: You can't unlimbo yourself!",
+                          color=0xDD2222)
+            await ctx.send(embed=embed)
             return
 
         if member == None:
-            await ctx.channel.send("Please provide a user!")
+            embed = Embed(description=f":x: Please provide a member!",
+                          color=0xDD2222)
+            await ctx.send(embed=embed)
             return
 
         if limborole not in member.roles:
-            await ctx.send(f"{member.mention} is not in limbo")
+            embed = Embed(description=f":x: {member.mention} is not in limbo",
+                          color=0xDD2222)
+            await ctx.send(embed=embed)
             return
 
         if limborole in member.roles:
 
             role_ids = field(f"SELECT roles_ids FROM limbo WHERE user_id = {member.id} AND guild_id = {ctx.guild.id}")
             roles = [ctx.guild.get_role(int(id_)) for id_ in role_ids.split(",") if len(id_)]
-
             if roles in member.roles:
-                await ctx.send(f"Can't give {member.mention} roles he already has")
+                embed = Embed(description=f":x: Can't give {member.mention} roles they already have",
+                              color=0xDD2222)
+                await ctx.send(embed=embed)
                 return
 
             await member.edit(roles=roles)

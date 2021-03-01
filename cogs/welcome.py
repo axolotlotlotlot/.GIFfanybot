@@ -37,6 +37,16 @@ class Welcomer(commands.Cog):
                 guild = before.guild
                 channel = self.bot.get_channel(id=int(result[0]))
                 await channel.send(str(result1[0]).format(member=member, guild=guild))
+                #name = after.display_name
+                #if name == 'Bill Cipher':
+                    #cursor.execute(f"SELECT msg2 FROM welcomer WHERE guild_id = {before.guild.id}")
+                    #result2 = cursor.fetchone()
+                    #member = before.mention
+                    #guild = before.guild
+                    #channel = self.bot.get_channel(id=int(result[0]))
+                    #await channel.send(str(result2[0]).format(member=member, guild=guild))
+        cursor.close()
+        db.close()
 
     @commands.group(invoke_without_command=True)
     @commands.has_role('Mods')

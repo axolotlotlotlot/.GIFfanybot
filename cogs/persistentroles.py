@@ -1,4 +1,3 @@
-import asyncio
 import dataset
 import discord
 import sqlite3
@@ -19,21 +18,9 @@ class persistentroles(commands.Cog):
             if member.id == user['userid']:
                 return
         GFC = discord.utils.get(member.guild.roles, name="Gravity Falls Citizens")
-        mute = discord.utils.get(member.guild.roles, name="Muted")
-        warn1 = discord.utils.get(member.guild.roles, name="Warning-1")
-        warn2 = discord.utils.get(member.guild.roles, name="Warning-2")
-        warn3 = discord.utils.get(member.guild.roles, name="Warning-3")
+        muted = discord.utils.get(member.guild.roles, name="Muted")
 
-        if mute in member.roles:
-            return
-        if warn1 in member.roles:
-            return
-        if warn2 in member.roles:
-            return
-        if warn3 in member.roles:
-            return
-
-        if GFC in member.roles:
+        if (GFC in member.roles) or (muted in member.roles):
             proles = ",".join([str(role.id) for role in member.roles[1:]])
             db = dataset.connect('sqlite:///journal3.db')
             db.begin()

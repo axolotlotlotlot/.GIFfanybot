@@ -2,6 +2,7 @@ import discord
 import sqlite3
 import datetime
 import dataset
+import asyncio
 from discord import Embed
 from discord.ext import commands
 from discord.ext.commands import Greedy, CheckFailure
@@ -15,7 +16,7 @@ class Tags(commands.Cog):
 
     @commands.group(aliases=['t'], invoke_without_command=True)
     @commands.has_role('Mystery Twins')
-    async def tag(self, ctx, tag_Name=None):
+    async def tag(self, ctx, *,tag_Name=None):
         """To create a tag use <p>tag create <name of the tag> <content> To recall a tag use <p>tag <name of the tag>"""
         db = dataset.connect('sqlite:///journal3.db')
         db.begin()
@@ -29,17 +30,16 @@ class Tags(commands.Cog):
                 await ctx.send(embed=embed)
                 return
 
-        db = sqlite3.connect('journal3.db')
-        cursor = db.cursor()
+        table2 = db['tag']
+        tagnames = table2.find(names={'ilike': f'{tag_Name}'}, guild_id=ctx.channel.guild.id)
+        nms = ''
+        for tn in tagnames:
+            nms = nms + f"{tn['names'].lower()}" + ', '
+        names = nms.split(',')
 
-        def field(command, *values):
-            cursor.execute(command, tuple(values))
-
-            for row in cursor.fetchall():
-                return row[0]
-
-        tagname = field("SELECT names FROM tag WHERE guild_id = ? AND names = ?", ctx.guild.id, tag_Name)
-        tagcontent = field("SELECT content FROM tag WHERE guild_id = ? AND names = ?", ctx.guild.id, tag_Name)
+        tagscontent = table2.distinct('content', names={'ilike': f'{tag_Name}'}, guild_id=ctx.channel.guild.id)
+        for tc in tagscontent:
+            tagcontent = tc['content']
 
         if tag_Name == None:
             embed = Embed(
@@ -48,21 +48,16 @@ class Tags(commands.Cog):
             await ctx.send(embed=embed)
             return
 
-        if tag_Name != tagname:
+        if tag_Name.lower() not in names:
             embed = Embed(
                 description=":x: Couldn't find that tag",
                 color=0xDD2222)
             await ctx.send(embed=embed)
             return
 
-        if tag_Name == tagname:
+        if tag_Name.lower() in names:
             await ctx.send(f"{tagcontent}")
             return
-
-        db.commit()
-        cursor.close()
-        db.close()
-
 
     @tag.error
     async def tag_error(self, ctx, exc):
@@ -71,88 +66,140 @@ class Tags(commands.Cog):
                           color=0xDD2222)
             await ctx.send(embed=embed)
 
-    @tag.command(aliases=['filteradd', 'blacklist'])
-    @commands.has_permissions(ban_members=True)
-    async def fadd(self, ctx, member: discord.Member=None, *, reason=None):
-        modrole = discord.utils.get(ctx.guild.roles, name="Mods")
-        if modrole in ctx.author.roles:
-            if member == ctx.author:
-                embed = Embed(
-                    description=":x: You cannot filter yourself!",
-                    color=0xDD2222)
-                await ctx.send(embed=embed)
-                return
-
-            if member == None:
-                embed = Embed(
-                    description=":x: Please provide a user!",
-                    color=0xDD2222)
-                await ctx.send(embed=embed)
-                return
-
-            if reason == None:
-                reason = "No reason provided."
-
-            db = dataset.connect('sqlite:///journal3.db')
-            db.begin()
-            table = db['userfilter']
-            table.insert(dict(guild=ctx.guild.id, user=member.id))
-            db.commit()
-            embed = discord.Embed(
-                description=f":white_check_mark: {member.mention} was added to the list of spammy users \nFor: {reason}",
-                timestamp=datetime.utcnow(),
-                color=0x77B255)
-            embed.set_footer(text=f'Auctioned by: {ctx.author} / {ctx.author.id}')
-            await ctx.send(embed=embed)
-
-    @fadd.error
-    async def tag_error(self, ctx, exc):
-        if isinstance(exc, CheckFailure):
-            embed = Embed(
-                description=f":x: You have insufficient permissions to perform this action",
-                color=0xDD2222)
-            await ctx.send(embed=embed)
-
-    @tag.command(aliases=['filterremove', 'whitelist', 'fdelete', 'filterdelete'])
-    @commands.has_permissions(ban_members=True)
-    async def fremove(self, ctx, member: discord.Member = None, *, reason=None):
-        if member == ctx.author:
-            embed = Embed(
-                description=":x: You cannot unfilter yourself!",
-                color=0xDD2222)
-            await ctx.send(embed=embed)
+    @commands.Cog.listener()
+    async def on_message(self, message):
+        if message.author == self.bot.user:
             return
-
-        if member == None:
-            embed = Embed(
-                description=":x: Please provide a user!",
-                color=0xDD2222)
-            await ctx.send(embed=embed)
-            return
-
-        if reason == None:
-            reason = "No reason provided."
-
         db = dataset.connect('sqlite:///journal3.db')
         db.begin()
-        table = db['userfilter']
-        table.delete(guild=ctx.guild.id, user=member.id)
-        db.commit()
-        embed = discord.Embed(description=f":white_check_mark: {member.mention} was removed from the list of spammy users \nFor: {reason}",
-                              timestamp=datetime.utcnow(),
-                              color=0x77B255)
-        embed.set_footer(text=f'Auctioned by: {ctx.author} / {ctx.author.id}')
-        await ctx.send(embed=embed)
+        dbs = sqlite3.connect('journal3.db')
+        cursor = dbs.cursor()
+        def field(command, *values):
+            cursor.execute(command, tuple(values))
 
-    @fremove.error
-    async def tag_error(self, ctx, exc):
-        if isinstance(exc, CheckFailure):
-            embed = Embed(
-                description=f":x: You have insufficient permissions to perform this action",
-                color=0xDD2222)
-            await ctx.send(embed=embed)
+            for row in cursor.fetchall():
+                return row[0]
 
-    @tag.command()
+        prefix = field('SELECT prefix FROM prefixes WHERE guildid = {0}'.format(message.guild.id))
+        cursor.close
+        dbs.close
+        create = f'{prefix}t create'
+        cr = f'{prefix}tag create'
+        if message.content == create or message.content == cr:
+            channel = message.channel
+            embed = discord.Embed(
+                description="Tag creation started. Please provide a tag name. I will save your next message as the tag name, or type `abort` to abort the process.",
+                color=message.author.top_role.colour)
+            startembed = await channel.send(embed=embed)
+
+            def check(m):
+                return m.channel == channel and m.author == message.author
+
+            while True:
+                try:
+                    msg = await self.bot.wait_for('message', timeout=60.0, check=check)
+
+                except asyncio.TimeoutError:
+                        embed = Embed(
+                            description=f":x: Uh oh, {message.author.mention}! You took longer than 1 minute to respond, tag creation cancelled.",
+                            color=0xDD2222)
+                        await channel.send(embed=embed)
+                        await startembed.delete()
+                        await message.delete()
+                        break
+
+                abort = ['abort', 'Abort', 'ABort', 'ABOrt', 'ABORt', 'ABORT', 'aBORT', 'abORT', 'aboRT', 'aborT']
+
+                if msg.content in abort:
+                    embed = Embed(
+                        description=":x: Tag creation process aborted",
+                        color=0xDD2222)
+                    await channel.send(embed=embed)
+                    await startembed.delete()
+                    await msg.delete()
+                    await message.delete()
+                    return
+
+                elif msg.content not in abort:
+                    table = db['tag']
+                    tagnames = table.find(names={'ilike': f'{msg.content}'}, guild_id=message.channel.guild.id)
+                    nms = ''
+                    for tn in tagnames:
+                        nms = nms + f"{tn['names'].lower()}" + ' '
+                    name = nms.split(' ')
+                    cntnt = msg.content
+                    content = cntnt.lower()
+                    if content in name:
+                        embed = Embed(
+                            description=":x: Tag with that name already exists, try again",
+                            color=0xDD2222)
+                        await channel.send(embed=embed)
+                        await msg.delete()
+                    if content not in name:
+                        embed = discord.Embed(
+                            description=f"Tag's name is `{msg.content}`. Now please provide tag content. I will save your next message as the tag content, or type `abort` to abort the process.",
+                            color=message.author.top_role.colour)
+                        msgembed = await channel.send(embed=embed)
+                        try:
+                            contentmsg = await self.bot.wait_for('message', timeout=60.0, check=check)
+
+                        except asyncio.TimeoutError:
+                                embed = Embed(
+                                    description=f":x: Uh oh, {message.author.mention}! You took longer than 1 minute to respond, tag creation cancelled.",
+                                    color=0xDD2222)
+                                await channel.send(embed=embed)
+                                await startembed.delete()
+                                await msg.delete()
+                                await msgembed.delete()
+                                await message.delete()
+
+                        if contentmsg.content in abort:
+                            embed = Embed(
+                                description=":x: Tag creation process aborted",
+                                color=0xDD2222)
+                            await channel.send(embed=embed)
+                            await startembed.delete()
+                            await msg.delete()
+                            await msgembed.delete()
+                            await contentmsg.delete()
+                            await message.delete()
+                            return
+
+                        elif contentmsg.attachments:
+                            for url in contentmsg.attachments:
+                                table.insert(dict(guild_id=channel.guild.id, author_id=message.author.id, names=msg.content, content=url.url))
+                                db.commit()
+                                embed = discord.Embed(title=":white_check_mark: Tag created",
+                                                      timestamp=datetime.datetime.utcnow(),
+                                                      color=0x77B255)
+                                embed.add_field(name=f"Tag name: {msg.content}", value=f"Tag content: \n{url.url}", inline=False)
+                                embed.set_footer(text="Author ID:{0}".format(message.author.id))
+                                await channel.send(embed=embed)
+                                await startembed.delete()
+                                await msg.delete()
+                                await msgembed.delete()
+                                #await contentmsg.delete()
+                                await message.delete()
+                                return
+                        else:
+                            table.insert(dict(guild_id=channel.guild.id, author_id=message.author.id, names=msg.content, content=contentmsg.content))
+                            db.commit()
+                            embed = discord.Embed(title=":white_check_mark: Tag created",
+                                                  timestamp=datetime.datetime.utcnow(),
+                                                  color=0x77B255)
+                            embed.add_field(name=f"Tag name: {msg.content}", value=f"Tag content: \n{contentmsg.content}", inline=False)
+                            embed.set_footer(text="Author ID:{0}".format(message.author.id))
+                            await channel.send(embed=embed)
+                            await startembed.delete()
+                            await msg.delete()
+                            await msgembed.delete()
+                            await contentmsg.delete()
+                            await message.delete()
+                            return
+
+
+
+    @tag.command(aliases=['c'])
     async def create(self, ctx, tag_Name=None, *, content=None):
         db = sqlite3.connect('journal3.db')
         cursor = db.cursor()
@@ -166,25 +213,20 @@ class Tags(commands.Cog):
         tagname = field("SELECT names FROM tag WHERE guild_id = ? AND names = ?", ctx.guild.id, tag_Name)
 
         if tag_Name == None:
-            embed = Embed(
-                description=":x: Please provide a tag name",
-                color=0xDD2222)
-            await ctx.send(embed=embed)
+#            embed = Embed(
+#               description=":x: Please provide a tag name",
+#                color=0xDD2222)
+#            await ctx.send(embed=embed)
             return
 
         if content == None:
-            embed = Embed(
-                description=":x: Please provide tag content",
-                color=0xDD2222)
-            await ctx.send(embed=embed)
+#            embed = Embed(
+#                description=":x: Please provide tag content",
+#                color=0xDD2222)
+#            await ctx.send(embed=embed)
             return
 
-        if tag_Name == tagname:
-            embed = Embed(
-                description=":x: Tag with that name already exists",
-                color=0xDD2222)
-            await ctx.send(embed=embed)
-            return
+
 
         if tag_Name != tagname:
             db = dataset.connect('sqlite:///journal3.db')
@@ -198,6 +240,13 @@ class Tags(commands.Cog):
             embed.add_field(name=f"{tag_Name}", value=f"{content}", inline=False)
             embed.set_footer(text="Author ID:{0}".format(ctx.author.id))
             await ctx.send(embed=embed)
+
+        elif tag_Name == tagname:
+            embed = Embed(
+                description=":x: Tag with that name already exists",
+                color=0xDD2222)
+            await ctx.send(embed=embed)
+            return
 
         db.commit()
         cursor.close()
@@ -385,39 +434,24 @@ class Tags(commands.Cog):
             await ctx.send(embed=embed)
 
     @tag.command()
-    async def ban(self, ctx, member: discord.Member = None, *, reason=None):
-        """Fake ban member from guild. Use: <p>tag ban <member(s)> <reason>"""
-        if member == ctx.message.author:
-            embed = Embed(
-                description=":x: You cannot ban yourself!",
-                color=0xDD2222)
-            await ctx.send(embed=embed)
-            return
-
-        if member == None:
-            embed = Embed(
-                description=":x: Please provide a a user!",
-                color=0xDD2222)
-            await ctx.send(embed=embed)
-            return
-
-        if reason == None:
-            reason = "No reason provided."
-        embed = discord.Embed(description=f":white_check_mark: {member.mention} was yeeted from {ctx.guild} for {reason} by {ctx.author.mention}",
-                              timestamp=datetime.utcnow(),
-                              color=0x77B255)
-        await ctx.send(embed=embed, reason=reason)
-
-    @tag.command()
     async def list(self, ctx):
         db = dataset.connect('sqlite:///journal3.db')
         db.begin()
+        table = db['tag']
+        guildids = table.distinct('guild_id', guild_id=ctx.guild.id)
+        names = table.distinct('names', guild_id=ctx.guild.id)
         msg = 'List of all tags:\n'
 
-        for i in db['tag']:
+        for i in names:
             msg = msg + '**' + i['names'] + '**\n'
 
-        await ctx.send(msg)
+        if i['names'] is not None:
+            await ctx.send(msg)
+        else:
+            embed = Embed(
+                description=":x: Couldn't find any tags for this server.",
+                color=0xDD2222)
+            await ctx.send(embed=embed)
 
 def setup(bot):
     bot.add_cog(Tags(bot))
