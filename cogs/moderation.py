@@ -78,7 +78,8 @@ class Moderation(commands.Cog):
                             sid = 1
                         else:
                             sid = len(table) + 1
-                        table.insert(dict(strikeid=sid, guildid=ctx.guild.id, user=member.id, action="Ban", reason=reason))
+                        author = ctx.message.author
+                        table.insert(dict(strikeid=sid, guildid=ctx.guild.id, user=member.id, moderator=str(author), action="Ban", reason=reason))
                         db.commit()
                         await ctx.guild.ban(discord.Object(id=int(member.id)), reason=reason, delete_message_days=0)
                         embed = discord.Embed(description=f":white_check_mark: {member.mention} **was banned** for {reason} \n**Member ID:** {member.id} \n**Actioned by:** {ctx.author.mention}",
@@ -97,7 +98,8 @@ class Moderation(commands.Cog):
                         sid = 1
                     else:
                         sid = len(table) + 1
-                    table.insert(dict(strikeid=sid, guildid=ctx.guild.id, user=target.id, action="Ban", reason=reason))
+                    author = ctx.message.author
+                    table.insert(dict(strikeid=sid, guildid=ctx.guild.id, user=member.id, moderator=str(author), action="Ban", reason=reason))
                     db.commit()
                     await ctx.guild.ban(discord.Object(id=int(target.id)), reason=reason, delete_message_days=0)
                     embed = discord.Embed(description=f":white_check_mark: {target.mention} **was banned** for {reason} \n**User ID:** {target.id} \n**Actioned by:** {ctx.author.mention}",
@@ -135,7 +137,8 @@ class Moderation(commands.Cog):
                     sid = 1
                 else:
                     sid = len(table) + 1
-                table.insert(dict(strikeid=sid, guildid=ctx.guild.id, user=member.id, action="Unban", reason=reason))
+                author = ctx.message.author
+                table.insert(dict(strikeid=sid, guildid=ctx.guild.id, user=member.id, moderator=str(author), action="Unban", reason=reason))
                 db.commit()
                 await ctx.guild.unban(target, reason=reason)
                 embed = Embed(title="Member unbanned",
@@ -186,7 +189,8 @@ class Moderation(commands.Cog):
                         sid = 1
                     else:
                         sid = len(table) + 1
-                    table.insert(dict(strikeid=sid, guildid=ctx.guild.id, user=member.id, action="Kick", reason=reason))
+                    author = ctx.message.author
+                    table.insert(dict(strikeid=sid, guildid=ctx.guild.id, user=member.id, moderator=str(author), action="Kick", reason=reason))
                     db.commit()
                     await target.kick(reason=reason)
                     embed = discord.Embed(description=f":white_check_mark: {member.mention} **was kicked** for {reason} \n**Member ID:** {member.id} \n**Actioned by:** {ctx.author.mention}",
@@ -338,7 +342,8 @@ class Moderation(commands.Cog):
                 await ctx.send(embed=embed)
             else:
                 endtime = datetime.utcnow() + timedelta(days=int(time))
-                table.insert(dict(strikeid=sid, guildid=ctx.guild.id, user=member.id, action="Mute", reason=reason))
+                author = ctx.message.author
+                table.insert(dict(strikeid=sid, guildid=ctx.guild.id, user=member.id, moderator=str(author), action="Mute", reason=reason))
                 mutetable.insert(dict(guildid=ctx.guild.id, user=member.id, roles=member_roles, starttime=datetime.utcnow(), endtime=endtime))
                 db.commit()
                 await member.edit(roles=[])
@@ -368,7 +373,8 @@ class Moderation(commands.Cog):
                 await ctx.send(embed=embed)
             else:
                 endtime = datetime.utcnow() + timedelta(hours=int(time))
-                table.insert(dict(strikeid=sid, guildid=ctx.guild.id, user=member.id, action="Mute", reason=reason))
+                author = ctx.message.author
+                table.insert(dict(strikeid=sid, guildid=ctx.guild.id, user=member.id, moderator=str(author), action="Mute", reason=reason))
                 mutetable.insert(dict(guildid=ctx.guild.id, user=member.id, roles=member_roles, starttime=datetime.utcnow(), endtime=endtime))
                 db.commit()
                 await member.edit(roles=[])
@@ -398,7 +404,8 @@ class Moderation(commands.Cog):
                 await ctx.send(embed=embed)
             else:
                 endtime = datetime.utcnow() + timedelta(minutes=int(time))
-                table.insert(dict(strikeid=sid, guildid=ctx.guild.id, user=member.id, action="Mute", reason=reason))
+                author = ctx.message.author
+                table.insert(dict(strikeid=sid, guildid=ctx.guild.id, user=member.id, moderator=str(author), action="Mute", reason=reason))
                 mutetable.insert(dict(guildid=ctx.guild.id, user=member.id, roles=member_roles, starttime=datetime.utcnow(), endtime=endtime))
                 db.commit()
                 await member.edit(roles=[])
@@ -491,6 +498,132 @@ class Moderation(commands.Cog):
 
                                     table.delete(guildid=guilds.id, user=members.id, endtime=e.endtime)
                                     db.commit()
+
+    @commands.command(aliases=['modlogs'])
+    @commands.has_permissions(kick_members=True)
+    async def strikes(self, ctx, member: discord.User=None):
+        if member == None:
+            embed = Embed(description=f":x: Please provide a member",
+                          color=0xDD2222)
+            await ctx.send(embed=embed)
+            return
+        db = dataset.connect('sqlite:///journal3.db', row_type=stuf)
+        db.begin()
+        table = db['strikes']
+        msg = ''
+        count = ''
+        strikeids = table.distinct('strikeid', guildid=ctx.guild.id, user=member.id)
+        for sid in strikeids:
+            reasons = table.distinct('reason', guildid=ctx.guild.id, user=member.id, strikeid=sid.strikeid)
+            actions = table.distinct('action', guildid=ctx.guild.id, user=member.id, strikeid=sid.strikeid)
+            moderators = table.distinct('moderator', guildid=ctx.guild.id, user=member.id, strikeid=sid.strikeid)
+            for r in reasons:
+                reason = r.reason
+            for a in actions:
+                action = a.action
+            for m in moderators:
+                moderator = m.moderator
+                msg = msg + f'**Strike ID:** {sid.strikeid} |**Action:** {action} |**Moderator:** {moderator} |**Reason:** {reason}\n'
+                count = count + f"{sid.strikeid}" + ','
+        c = count.split(',')
+        if len(c) == 1:
+            embed = Embed(description=f":information_source: There are no strikes for {member}.",
+                          colour=discord.Colour.from_rgb(59, 136, 195))
+            await ctx.send(embed=embed)
+            return
+
+        embed = Embed(title=f"Strikes for {member} | {len(c) - 1} found",
+                      description=msg,
+                      colour=discord.Colour.from_rgb(249, 113, 59),
+                      timestamp=datetime.utcnow())
+        embed.set_thumbnail(url=member.avatar_url)
+        embed.set_footer(text=f'Member ID: {member.id}')
+        await ctx.send(embed=embed)
+
+    @commands.command()
+    @commands.has_permissions(kick_members=True)
+    async def warn(self, ctx, member: Member=None, *, reason="No reason provided."):
+        if member == None:
+            embed = Embed(description=f":x: Please provide a member",
+                          color=0xDD2222)
+            await ctx.send(embed=embed)
+            return
+        try:
+            embed = Embed(description=f":grey_exclamation: **You have been warned in {ctx.guild} for:** {reason}",
+                          colour=discord.Colour.from_rgb(59, 136, 195))
+            await member.send(embed=embed)
+            db = dataset.connect('sqlite:///journal3.db', row_type=stuf)
+            db.begin()
+            table = db['strikes']
+            if len(table) == 0:
+                sid = 1
+            else:
+                sid = len(table) + 1
+            author = ctx.message.author
+            table.insert(dict(strikeid=sid, guildid=ctx.guild.id, user=member.id, moderator=str(author), action="Warn", reason=reason))
+            db.commit()
+            embed = Embed(colour=discord.Colour.from_rgb(59, 136, 195),
+                          timestamp=datetime.utcnow())
+            embed.set_author(name=f"{member} warned | {reason}", icon_url=member.avatar_url)
+            embed.set_footer(text=f'Member ID: {member.id}')
+            await ctx.send(embed=embed)
+        except:
+            db = dataset.connect('sqlite:///journal3.db', row_type=stuf)
+            db.begin()
+            table = db['strikes']
+            if len(table) == 0:
+                sid = 1
+            else:
+                sid = len(table) + 1
+            author = ctx.message.author
+            table.insert(dict(strikeid=sid, guildid=ctx.guild.id, user=member.id, moderator=str(author), action="Warn", reason=reason))
+            db.commit()
+            embed = Embed(colour=discord.Colour.from_rgb(59, 136, 195),
+                          timestamp=datetime.utcnow())
+            embed.set_author(name=f"Couldn't DM {member}, warn has been logged | {reason}", icon_url=member.avatar_url)
+            embed.set_footer(text=f'Member ID: {member.id}')
+            await ctx.send(embed=embed)
+            
+    @commands.command(aliases=['warns'])
+    @commands.has_permissions(kick_members=True)
+    async def warnings(self, ctx, member: discord.User=None):
+        if member == None:
+            embed = Embed(description=f":x: Please provide a member",
+                          color=0xDD2222)
+            await ctx.send(embed=embed)
+            return
+        db = dataset.connect('sqlite:///journal3.db', row_type=stuf)
+        db.begin()
+        table = db['strikes']
+        msg = ''
+        count = ''
+        strikeids = table.distinct('strikeid', guildid=ctx.guild.id, user=member.id, action="Warn")
+        for sid in strikeids:
+            reasons = table.distinct('reason', guildid=ctx.guild.id, user=member.id, strikeid=sid.strikeid)
+            moderators = table.distinct('moderator', guildid=ctx.guild.id, user=member.id, strikeid=sid.strikeid)
+            for r in reasons:
+                reason = r.reason
+            for m in moderators:
+                moderator = m.moderator
+                msg = msg + f'**Strike ID:** {sid.strikeid} |**Moderator:** {moderator} |**Reason:** {reason}\n'
+                count = count + f"{sid.strikeid}" + ','
+        c = count.split(',')
+        if len(c) == 1:
+            embed = Embed(description=f":information_source: There are no warnings for {member}.",
+                          colour=discord.Colour.from_rgb(59, 136, 195))
+            await ctx.send(embed=embed)
+            return
+
+        embed = Embed(title=f"Warnings for {member} | {len(c) - 1} found",
+                      description=msg,
+                      colour=discord.Colour.from_rgb(249, 113, 59),
+                      timestamp=datetime.utcnow())
+        embed.set_thumbnail(url=member.avatar_url)
+        embed.set_footer(text=f'Member ID: {member.id}')
+        await ctx.send(embed=embed)
+
+
+
 
 def setup(bot):
     bot.add_cog(Moderation(bot))
