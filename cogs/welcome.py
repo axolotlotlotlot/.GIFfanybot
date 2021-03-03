@@ -74,24 +74,113 @@ class Welcomer(commands.Cog):
         cursor.close()
         db.close()
 
-    @welcome.command()
-    async def message(self, ctx, *, text):
+@welcome.command()
+    async def message(self, ctx, *, text=None):
         db = sqlite3.connect('journal3.db')
         cursor = db.cursor()
         cursor.execute(f"SELECT channel_id FROM welcomer WHERE guild_id = {ctx.guild.id}")
         result = cursor.fetchone()
+        if text is None:
+            return
         if result is None:
             sql = ("INSERT INTO welcomer(guild_id, msg) VALUES(?, ?)")
             val = (ctx.guild.id, text)
-            await ctx.send(f"Welcome message has been set to '{text}'")
+            embed = discord.Embed(title=f":white_check_mark: Welcome message has been set to:\n'{text}'",
+                                  timestamp=datetime.datetime.utcnow(),
+                                  color=0x77B255)
+            await ctx.send(embed=embed)
         elif result is not None:
             sql = ("UPDATE welcomer SET msg = ? WHERE guild_id = ?")
             val = (text, ctx.guild.id)
-            await ctx.send(f"Welcome message has been updated to '{text}'")
+            embed = discord.Embed(title=f":white_check_mark: Welcome message has been set to:\n'{text}'",
+                                  timestamp=datetime.datetime.utcnow(),
+                                  color=0x77B255)
+            await ctx.send(embed=embed)
         cursor.execute(sql, val)
         db.commit()
         cursor.close()
         db.close()
+
+    @commands.Cog.listener()
+    async def on_message(self, message):
+        if message.author == self.bot.user:
+            return
+        dbs = sqlite3.connect('journal3.db')
+        cursor = dbs.cursor()
+        def field(command, *values):
+            cursor.execute(command, tuple(values))
+
+            for row in cursor.fetchall():
+                return row[0]
+
+        prefix = field('SELECT prefix FROM prefixes WHERE guildid = {0}'.format(message.guild.id))
+        cursor.close
+        dbs.close
+        create = f'{prefix}welcome message'
+        if message.content == create:
+            channel = message.channel
+            if message.author.guild_permissions.administrator:
+                embed = discord.Embed(
+                    description="Welcome message creation started. Please provide welcome message contents. I will save your next message as the welcome message contents, or type `abort` to abort the process.",
+                    color=message.author.top_role.colour)
+                startembed = await channel.send(embed=embed)
+
+                def check(m):
+                    return m.channel == channel and m.author == message.author
+
+                try:
+                    msg = await self.bot.wait_for('message', timeout=60.0, check=check)
+
+                except asyncio.TimeoutError:
+                        embed = discord.Embed(
+                            description=f":x: Uh oh, {message.author.mention}! You took longer than 1 minute to respond, welcome message creation cancelled.",
+                            color=0xDD2222)
+                        await channel.send(embed=embed)
+                        await startembed.delete()
+                        await message.delete()
+                        return
+
+                abort = ['abort', 'Abort', 'ABort', 'ABOrt', 'ABORt', 'ABORT', 'aBORT', 'abORT', 'aboRT', 'aborT']
+
+                if msg.content in abort:
+                    embed = discord.Embed(
+                        description=":x: Tag creation process aborted",
+                        color=0xDD2222)
+                    await channel.send(embed=embed)
+                    await startembed.delete()
+                    await msg.delete()
+                    await message.delete()
+                    return
+
+                elif msg.content not in abort:
+                    db = sqlite3.connect('journal3.db')
+                    cursor = db.cursor()
+                    cursor.execute(f"SELECT channel_id FROM welcomer WHERE guild_id = {message.guild.id}")
+                    result = cursor.fetchone()
+                    if result is None:
+                        sql = ("INSERT INTO welcomer(guild_id, msg) VALUES(?, ?)")
+                        val = (message.guild.id, msg.content)
+                        embed = discord.Embed(title=f":white_check_mark: Welcome message has been set to:\n'{msg.content}'",
+                                              timestamp=datetime.datetime.utcnow(),
+                                              color=0x77B255)
+                        await channel.send(embed=embed)
+                        await message.delete()
+                        await startembed.delete()
+                        await msg.delete()
+                    elif result is not None:
+                        sql = ("UPDATE welcomer SET msg = ? WHERE guild_id = ?")
+                        val = (msg.content, message.guild.id)
+                        embed = discord.Embed(title=f":white_check_mark: Welcome message has been set to:\n'{msg.content}'",
+                                              timestamp=datetime.datetime.utcnow(),
+                                              color=0x77B255)
+                        await channel.send(embed=embed)
+                        await message.delete()
+                        await startembed.delete()
+                        await msg.delete()
+                    cursor.execute(sql, val)
+                    db.commit()
+                    cursor.close()
+                    db.close()
 
 
 
