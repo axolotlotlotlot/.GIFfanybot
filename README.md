@@ -1,7 +1,7 @@
 # **Welcome to the .GIFfany bot docs!**
 ![](https://media.discordapp.net/attachments/799214881151909938/802489255657734144/GIFfany5756.gif?width=100&height=100)
 
-### A discord bot poorly made in discord.py rewrite for [r/GravityFalls server.](discord.gg/gravityfalls)
+### A discord bot poorly made in discord.py rewrite for r/GravityFalls server discord.gg/gravityfalls
 ***
 
 ### Modules:
